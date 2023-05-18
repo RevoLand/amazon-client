@@ -153,6 +153,8 @@ const productParser = async (url: string): Promise<ProductParserInterface | unde
     await page.close();
 
     return undefined;
+  } finally {
+    browser.close();
   }
 };
 
