@@ -9,7 +9,7 @@
       "node"
     ],
     /* Modules */
-    "module": "commonjs",
+    "module": "Node16",
     "moduleResolution": "node",
     "rootDir": "./src",
     "outDir": "./dist",
