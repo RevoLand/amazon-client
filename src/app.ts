@@ -1,7 +1,6 @@
 import 'dotenv/config';
-import Client from './components/Client';
-import { WebSocket } from 'ws';
-import { wait } from './helpers/common';
+import logUpdate from 'log-update';
+import Client from './components/Client.js';
 
 export let client: Client;
 
@@ -9,12 +8,14 @@ const main = async () => {
   client = new Client();
   client.initialize();
 
-  while (client.socket.readyState !== WebSocket.OPEN) {
-    console.log('Socket bağlantısı gerçekleştirilene kadar bekliyoruz!');
-    await wait(5000);
-  }
-
-  console.log('Socket bağlantısı başarılı bir şekilde gerçekleşti!', client.socket.readyState);
+  setInterval(() => {
+    logUpdate(`
+    Server: ${client.socket.url}
+    Status: ${client.socket.readyState}
+    Products: ${client.products.length}
+    Captcha: ${client.captcha.size}
+    `);
+  }, 500);
 };
 
 main();

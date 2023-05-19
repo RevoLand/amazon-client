@@ -1,16 +1,16 @@
 {
   "compilerOptions": {
     /* Language and Environment */
-    "target": "es6",
+    "target": "ES2021",
     "lib": [
-      "ES6"
+      "ES2021"
     ],
     "types": [
       "node"
     ],
     /* Modules */
     "module": "Node16",
-    "moduleResolution": "node",
+    "moduleResolution": "node16",
     "rootDir": "./src",
     "outDir": "./dist",
     "esModuleInterop": true,
@@ -25,6 +25,9 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true
   },
+  "ts-node": {
+    "esm": true
+	},
   "include": ["./src/**/*"],
   "exclude": ["node_modules", "dist"]
 }

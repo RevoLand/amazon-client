@@ -1,10 +1,18 @@
+import { randomInt } from 'crypto';
 import { CloseEvent, ErrorEvent, RawData, WebSocket } from 'ws';
-import webSocket from '../config/webSocket';
-import { wait } from '../helpers/common';
-import productParser from './product/productParser';
+import webSocket from '../config/webSocket.js';
+import { wait } from '../helpers/common.js';
+import productParser from './product/productParser.js';
 
 class Client {
   socket: WebSocket;
+
+  captcha: Map<string, string> = new Map();
+
+  products: {
+    productId: number,
+    url: string
+  }[] = [];
 
   private heartbeatTimeout: NodeJS.Timeout;
 
@@ -16,13 +24,14 @@ class Client {
     }, 15000 + 2000);
   };
 
-  private handleServerMessage = async (data: RawData) => {
+  private handleServerMessage = async (serverMessage: RawData) => {
     try {
       const messageObject: {
         type: string;
         value: string;
+        data: string;
         channelId: string;
-      } = JSON.parse(data.toString());
+      } = JSON.parse(serverMessage.toString());
 
       if (messageObject.type === 'begin-tracking') {
         const beginTrackingObject: {
@@ -30,11 +39,15 @@ class Client {
           url: string
         } = JSON.parse(messageObject.value);
 
+        this.products.push(beginTrackingObject);
+
         this.socket.send(JSON.stringify({
           type: 'begin-tracking-handshake',
           value: beginTrackingObject.productId
         }), async () => {
           const productParserResult = await productParser(beginTrackingObject.url);
+
+          this.products = this.products.filter(product => product.productId !== beginTrackingObject.productId);
 
           if (!productParserResult) {
             return;
@@ -49,7 +62,19 @@ class Client {
       }
 
       if (messageObject.type === 'create-tracking') {
+        const beginTrackingObject: {
+          productId: number,
+          url: string
+        } = {
+          url: messageObject.value,
+          productId: randomInt(Number.MAX_SAFE_INTEGER - 1000, Number.MAX_SAFE_INTEGER)
+        };
+
+        this.products.push(beginTrackingObject);
+
         const productParserResult = await productParser(messageObject.value);
+
+        this.products = this.products.filter(product => product.productId !== beginTrackingObject.productId);
 
         if (!productParserResult) {
           return;
@@ -63,6 +88,9 @@ class Client {
         }));
       }
 
+      if (messageObject.type === 'captcha-answer') {
+        this.captcha.set(messageObject.data, messageObject.value);
+      }
     } catch (error) {
       console.error('Error parsing message from Server: ', error);
     }

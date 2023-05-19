@@ -2,9 +2,10 @@ import { CheerioAPI, load } from 'cheerio';
 import dayjs from 'dayjs';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import puppeteer from 'puppeteer';
-import { trimNewLines } from '../../helpers/common';
-import { getTldFromUrl } from '../../helpers/productUrlHelper';
-import { ProductParserInterface } from '../../interfaces/ProductParserInterface';
+import { client } from '../../app.js';
+import { trimNewLines, wait } from '../../helpers/common.js';
+import { getTldFromUrl } from '../../helpers/productUrlHelper.js';
+import { ProductParserInterface } from '../../interfaces/ProductParserInterface.js';
 
 const getParsedProductData = ($: CheerioAPI): ProductParserInterface | undefined => {
   try {
@@ -54,7 +55,6 @@ const getParsedProductData = ($: CheerioAPI): ProductParserInterface | undefined
 };
 
 const productParser = async (url: string): Promise<ProductParserInterface | undefined> => {
-  console.log(dayjs().toString() + ' | Parsing product:', url);
   const browser = await puppeteer.launch({
     headless: true
   });
@@ -93,34 +93,61 @@ const productParser = async (url: string): Promise<ProductParserInterface | unde
       timeout: 60_000
     });
 
-    const cookiesElement = await page.$('#sp-cc-accept');
+    let cookiesElement = await page.$('#sp-cc-accept');
     if (cookiesElement) {
       // Accept cookies!
       await page.click('#sp-cc-accept');
     }
 
     // Load the content into cheerio for easier parsing
-    const $ = load((await page.content()).replace(/\n\s*\n/gm, ''));
+    let $ = load((await page.content()).replace(/\n\s*\n/gm, ''));
 
     const captchaElement = await page.$('#captchacharacters');
 
-    // TODO: Captcha
     if (captchaElement) {
-      // const captchaImg = $('form img').attr('src') ?? '';
-      // // productTracker.updateCaptcha(await computerVision(captchaImg));
+      // captcha resim url'ini getir
+      const captchaImg = $('form img').attr('src') ?? '';
+      // bu ürün url'i için server'dan gelmiş captcha metnini getir
+      let captchaText = client.captcha.get(url);
 
-      // // await page.type('#captchacharacters', productTracker.captcha);
+      // eğer captcha metni yoksa server'a resmi gönder
+      if (!captchaText) {
+        client.socket.send(JSON.stringify({
+          type: 'captcha',
+          value: captchaImg,
+          data: url
+        }));
 
-      // // productTracker.updateCaptcha('');
+        // server'dan captcha metni gelene kadar bekle
+        while (!client.captcha.has(url)) {
+          await wait(1000);
+        }
 
-      // await Promise.all([page.click('button[type="submit"]'), page.waitForNavigation()]);
+        // server'dan gelen captcha metnini tanımla
+        captchaText = client.captcha.get(url);
+      }
 
-      // const cookieJson = JSON.stringify(await page.cookies());
-      // writeFileSync(cookieFileName, cookieJson);
+      // captcha metni gir
+      await page.type('#captchacharacters', captchaText + '');
 
-      // await page.close();
+      // server'dan gelmiş captcha metnini temizle
+      client.captcha.delete(url);
 
-      // return await productParser(url);
+      // sayfa yönlendirme beklemesi
+      // ve captcha formu gönderimi için promise oluşturup bekle
+      await Promise.all([page.waitForNavigation(), page.click('button[type="submit"]')]);
+
+      // güncel cookie'leri sonradan kullanım için kaydet
+      const cookieJson = JSON.stringify(await page.cookies());
+      writeFileSync(cookieFileName, cookieJson);
+
+      cookiesElement = await page.$('#sp-cc-accept');
+      if (cookiesElement) {
+        // Accept cookies!
+        await page.click('#sp-cc-accept');
+      }
+
+      $ = load((await page.content()).replace(/\n\s*\n/gm, ''));
     }
 
     const product = getParsedProductData($);
@@ -140,17 +167,12 @@ const productParser = async (url: string): Promise<ProductParserInterface | unde
         url
       });
 
-      await page.close();
-
       return;
     }
-
-    await page.close();
 
     return product;
   } catch (error) {
     console.error('productParser error', error);
-    await page.close();
 
     return undefined;
   } finally {
