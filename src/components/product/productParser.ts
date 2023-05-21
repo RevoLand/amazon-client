@@ -54,6 +54,70 @@ const getParsedProductData = ($: CheerioAPI): ProductParserInterface | undefined
   }
 };
 
+const cookieHandler = async (page: puppeteer.Page) => {
+  const cookiesElement = await page.$('#sp-cc-accept');
+
+  if (!cookiesElement) {
+    return;
+  }
+
+  // Accept cookies!
+  await page.click('#sp-cc-accept');
+}
+
+const captchaHandler = async (page: puppeteer.Page, url: string, cookieFileName: string) => {
+  await cookieHandler(page);
+
+  const captchaElement = await page.$('#captchacharacters');
+
+  if (!captchaElement) {
+    return;
+  }
+
+  try {
+    const $ = load((await page.content()).replace(/\n\s*\n/gm, ''));
+    // captcha resim url'ini getir
+    const captchaImg = $('form img').attr('src') ?? '';
+    // bu ürün url'i için server'dan gelmiş captcha metnini getir
+    let captchaText = client.captcha.get(url);
+
+    // eğer captcha metni yoksa server'a resmi gönder
+    if (!captchaText) {
+      client.socket.send(JSON.stringify({
+        type: 'captcha',
+        value: captchaImg,
+        data: url
+      }));
+
+      // server'dan captcha metni gelene kadar bekle
+      while (!client.captcha.has(url)) {
+        await wait(1000);
+      }
+
+      // server'dan gelen captcha metnini tanımla
+      captchaText = client.captcha.get(url);
+    }
+
+    // captcha metni gir
+    await page.type('#captchacharacters', captchaText + '');
+
+    // server'dan gelmiş captcha metnini temizle
+    client.captcha.delete(url);
+
+    // sayfa yönlendirme beklemesi
+    // ve captcha formu gönderimi için promise oluşturup bekle
+    await Promise.all([page.waitForNavigation(), page.click('button[type="submit"]')]);
+
+    // güncel cookie'leri sonradan kullanım için kaydet
+    const cookieJson = JSON.stringify(await page.cookies());
+    writeFileSync(cookieFileName, cookieJson);
+
+    await captchaHandler(page, url, cookieFileName);
+  } catch (error) {
+    console.error('captchaHandler', error);
+  }
+}
+
 const productParser = async (url: string): Promise<ProductParserInterface | undefined> => {
   const browser = await puppeteer.launch({
     headless: true
@@ -93,62 +157,10 @@ const productParser = async (url: string): Promise<ProductParserInterface | unde
       timeout: 60_000
     });
 
-    let cookiesElement = await page.$('#sp-cc-accept');
-    if (cookiesElement) {
-      // Accept cookies!
-      await page.click('#sp-cc-accept');
-    }
+    await captchaHandler(page, url, cookieFileName);
 
     // Load the content into cheerio for easier parsing
-    let $ = load((await page.content()).replace(/\n\s*\n/gm, ''));
-
-    const captchaElement = await page.$('#captchacharacters');
-
-    if (captchaElement) {
-      // captcha resim url'ini getir
-      const captchaImg = $('form img').attr('src') ?? '';
-      // bu ürün url'i için server'dan gelmiş captcha metnini getir
-      let captchaText = client.captcha.get(url);
-
-      // eğer captcha metni yoksa server'a resmi gönder
-      if (!captchaText) {
-        client.socket.send(JSON.stringify({
-          type: 'captcha',
-          value: captchaImg,
-          data: url
-        }));
-
-        // server'dan captcha metni gelene kadar bekle
-        while (!client.captcha.has(url)) {
-          await wait(1000);
-        }
-
-        // server'dan gelen captcha metnini tanımla
-        captchaText = client.captcha.get(url);
-      }
-
-      // captcha metni gir
-      await page.type('#captchacharacters', captchaText + '');
-
-      // server'dan gelmiş captcha metnini temizle
-      client.captcha.delete(url);
-
-      // sayfa yönlendirme beklemesi
-      // ve captcha formu gönderimi için promise oluşturup bekle
-      await Promise.all([page.waitForNavigation(), page.click('button[type="submit"]')]);
-
-      // güncel cookie'leri sonradan kullanım için kaydet
-      const cookieJson = JSON.stringify(await page.cookies());
-      writeFileSync(cookieFileName, cookieJson);
-
-      cookiesElement = await page.$('#sp-cc-accept');
-      if (cookiesElement) {
-        // Accept cookies!
-        await page.click('#sp-cc-accept');
-      }
-
-      $ = load((await page.content()).replace(/\n\s*\n/gm, ''));
-    }
+    const $ = load((await page.content()).replace(/\n\s*\n/gm, ''));
 
     const product = getParsedProductData($);
 
