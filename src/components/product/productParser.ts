@@ -6,6 +6,7 @@ import { client } from '../../app.js';
 import { trimNewLines, wait } from '../../helpers/common.js';
 import { getTldFromUrl } from '../../helpers/productUrlHelper.js';
 import { ProductParserInterface } from '../../interfaces/ProductParserInterface.js';
+import { computerVision } from '../../helpers/computerVision.js';
 
 const getParsedProductData = ($: CheerioAPI): ProductParserInterface | undefined => {
   try {
@@ -65,6 +66,18 @@ const cookieHandler = async (page: puppeteer.Page) => {
   await page.click('#sp-cc-accept');
 }
 
+const captchaSolver = async (captchaImg: string, productUrl: string): Promise<boolean> => {
+  const captchaText = await computerVision(captchaImg);
+
+  if (!captchaText) {
+    return false;
+  }
+
+  client.captcha.set(productUrl, captchaText);
+
+  return true;
+}
+
 const captchaHandler = async (page: puppeteer.Page, url: string, cookieFileName: string) => {
   await cookieHandler(page);
 
@@ -78,7 +91,10 @@ const captchaHandler = async (page: puppeteer.Page, url: string, cookieFileName:
     const $ = load((await page.content()).replace(/\n\s*\n/gm, ''));
     // captcha resim url'ini getir
     const captchaImg = $('form img').attr('src') ?? '';
-    // bu ürün url'i için server'dan gelmiş captcha metnini getir
+
+    await captchaSolver(captchaImg, url);
+
+    // bu ürün url'i için server'dan gelmiş ya da otomatik olarak çözümlenmiş captcha metnini getir
     let captchaText = client.captcha.get(url);
 
     // eğer captcha metni yoksa server'a resmi gönder

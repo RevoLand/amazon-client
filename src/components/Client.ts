@@ -14,6 +14,8 @@ class Client {
     url: string
   }[] = [];
 
+  lastResponse?: Date;
+
   private heartbeatTimeout: NodeJS.Timeout;
 
   private heartbeat = () => {
@@ -25,6 +27,8 @@ class Client {
   };
 
   private handleServerMessage = async (serverMessage: RawData) => {
+    this.lastResponse = new Date();
+
     try {
       const messageObject: {
         type: string;

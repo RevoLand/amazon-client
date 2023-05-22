@@ -12,6 +12,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@azure/cognitiveservices-computervision": "8.2.0",
+    "@azure/ms-rest-js": "2.6.6",
     "cheerio": "1.0.0-rc.12",
     "dayjs": "1.11.7",
     "dotenv": "16.0.3",

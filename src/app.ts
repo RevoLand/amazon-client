@@ -10,10 +10,12 @@ const main = async () => {
 
   setInterval(() => {
     logUpdate(`
-    Server: ${client.socket.url}
-    Status: ${client.socket.readyState}
-    Products: ${client.products.length}
-    Captcha: ${client.captcha.size}
+    Socket Server: ${client.socket.url}
+    Socket Status: ${client.socket.readyState}
+    Product Tracking Queue: ${client.products.length}
+    Captcha Queue: ${client.captcha.size}
+
+    Last Response: ${client.lastResponse?.toString()}
     `);
   }, 500);
 };

@@ -4,6 +4,8 @@ declare global {
     interface ProcessEnv {
       WEB_SOCKET_ADDRESS: string;
       WEB_SOCKET_SECRET: string;
+      AZURE_COMPUTERVISIONKEY: string;
+      AZURE_COMPUTERVISIONENDPOINT: string;
     }
   }
 }
